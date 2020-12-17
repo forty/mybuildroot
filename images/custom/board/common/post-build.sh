@@ -9,7 +9,7 @@ if [ -e "${TARGET_DIR}/etc/inittab" ]; then
     # alias data partition to /dev/data
     grep -q '::sysinit:/bin/ln -sf $(/sbin/findfs LABEL=data) /dev/data' "${TARGET_DIR}/etc/inittab" || \
         sed -i '/::sysinit:\/bin\/mount -a/i\
-::sysinit:/bin/ln -sf $(/sbin/findfs LABEL=data) /dev/data
+::sysinit:/bin/mount -t sysfs sysfs /sys\n::sysinit:/bin/ln -sf $(/sbin/findfs LABEL=data) /dev/data\n::sysinit:/usr/sbin/expand-data-part
 ' "${TARGET_DIR}/etc/inittab"
 fi
 
