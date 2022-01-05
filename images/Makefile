@@ -1,12 +1,14 @@
-.PHONY: raspberrypi all raspberrypi_defconfig clean
+MAKEFLAGS := --jobs=$(shell nproc)
 
 CUSTOM_DIR := $(PWD)/custom
 
+.PHONY: all
 all: raspberrypi
 
 buildroot/.git:
 	git submodule update --init
 
+.PHONY: raspberrypi_defconfig
 raspberrypi_defconfig: buildroot/.git
 	mkdir -p ./build/raspberrypi/
 	cd buildroot ; \
@@ -14,10 +16,12 @@ raspberrypi_defconfig: buildroot/.git
 			-e $(CUSTOM_DIR)\
 			-O $(PWD)/build/raspberrypi/ \
 			$(CUSTOM_DIR)/configs/raspberrypi_defconfig \
-			$(CUSTOM_DIR)/support/config-fragments/common/ccache.config
+			$(CUSTOM_DIR)/support/config-fragments/ccache.config
 
+.PHONY: raspberrypi
 raspberrypi: raspberrypi_defconfig
-	$(MAKE) -C build/raspberrypi/ $(CCACHE_OPTIONS)
+	$(MAKE) -C build/raspberrypi/
 
+.PHONY: clean
 clean:
 	$(MAKE) -C build/raspberrypi/ clean

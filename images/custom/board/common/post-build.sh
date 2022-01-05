@@ -3,26 +3,30 @@
 set -u
 set -e
 
-if [ -e "${TARGET_DIR}/etc/inittab" ]; then
-    # keep rootfs in RO mode
-    sed -i '/::sysinit:\/bin\/mount -o remount,rw \//d' "${TARGET_DIR}/etc/inittab"
-    # alias data partition to /dev/data
-    grep -q '::sysinit:/bin/ln -sf $(/sbin/findfs LABEL=data) /dev/data' "${TARGET_DIR}/etc/inittab" || \
-        sed -i '/::sysinit:\/bin\/mount -a/i\
-::sysinit:/bin/mount -t sysfs sysfs /sys\n::sysinit:/bin/ln -sf $(/sbin/findfs LABEL=data) /dev/data\n::sysinit:/usr/sbin/expand-data-part
-' "${TARGET_DIR}/etc/inittab"
+BOARD_CFG="$2"
+BOARD_DIR="$(dirname "${BOARD_CFG}")"
+source "${BOARD_CFG}"
+
+################################################################################
+# Create temporary key to sign the rauc bundle
+################################################################################
+
+if [ -n "${RAUC_KEY_FILE+x}" ]; then
+    ln -sf "$RAUC_KEY_FILE" "${BINARIES_DIR}/key.pem"
+    ln -sf "$RAUC_CERT_FILE" "${BINARIES_DIR}/cert.pem"
+    ln -sf "$RAUC_CA_FILE" "${BINARIES_DIR}/ca.pem"
+elif [ ! -e "${BINARIES_DIR}/key.pem" ]; then
+	echo "/!\\ Generating temporary key for the build /!\\"
+	openssl req \
+		-x509 \
+		-newkey rsa:4096 \
+		-nodes \
+		-keyout "${BINARIES_DIR}/key.pem" \
+		-out "${BINARIES_DIR}/cert.pem" \
+		-subj "/O=Forty/CN=temp-build-cert"
+	ln -sf "${BINARIES_DIR}/cert.pem" "${BINARIES_DIR}/ca.pem"
 fi
 
-# Create data directory
-mkdir -p "${TARGET_DIR}/data"
-
-if [ -e "${TARGET_DIR}/etc/fstab" ]; then
-    grep -qE '^/dev/data' "${TARGET_DIR}/etc/fstab" || \
-        echo '/dev/data	/data	ext4	rw	0	2' >> "${TARGET_DIR}/etc/fstab"
-    grep -qE '^overlay	/etc' "${TARGET_DIR}/etc/fstab" || \
-        echo 'overlay	/etc	overlay	lowerdir=/etc,upperdir=/data/etc,workdir=/data/.etc_work	0	0' >> "${TARGET_DIR}/etc/fstab"
-    grep -qE '^overlay	/var' "${TARGET_DIR}/etc/fstab" || \
-        echo 'overlay	/var	overlay	lowerdir=/var,upperdir=/data/var,workdir=/data/.var_work	0	0' >> "${TARGET_DIR}/etc/fstab"
-    grep -qE '^overlay	/root' "${TARGET_DIR}/etc/fstab" || \
-        echo 'overlay	/root	overlay	lowerdir=/root,upperdir=/data/home,workdir=/data/.home_work	0	0' >> "${TARGET_DIR}/etc/fstab"
-fi
+cp "${BINARIES_DIR}/ca.pem" "${TARGET_DIR}/etc/rauc/ca.pem"
+cp "${BOARD_DIR}/rauc.conf" "${TARGET_DIR}/etc/rauc/system.conf"
+cp "${BOARD_DIR}/fw_env.config" "${TARGET_DIR}/etc/fw_env.config"
